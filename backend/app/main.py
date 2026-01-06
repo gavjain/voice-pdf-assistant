@@ -67,12 +67,13 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
-        "https://*.vercel.app",
-        "https://*.digitalocean.app"
+        "https://voice-pdf-assistant.vercel.app",
+        "https://voice-pdf-assistant-gavjain.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app"
 )
 
 # Rate limiting middleware
