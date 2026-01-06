@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Upload,
   Mic,
@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Keyboard,
   Send,
+  Server,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -54,8 +55,41 @@ export function VoiceCommandInterface() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [showTextInput, setShowTextInput] = useState(false);
   const [textCommand, setTextCommand] = useState("");
+  const [serverStatus, setServerStatus] = useState<"checking" | "ready" | "waking" | "error">("checking");
+  const [statusMessage, setStatusMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  // Check server health on component mount
+  useEffect(() => {
+    const checkServerHealth = async () => {
+      setServerStatus("checking");
+      setStatusMessage("Checking server status...");
+      
+      try {
+        await apiClient.healthCheck();
+        setServerStatus("ready");
+        setStatusMessage("");
+      } catch (err) {
+        setServerStatus("waking");
+        setStatusMessage("Server is waking up... This may take up to 60 seconds on first use.");
+        
+        // Retry after a delay
+        setTimeout(async () => {
+          try {
+            await apiClient.healthCheck();
+            setServerStatus("ready");
+            setStatusMessage("");
+          } catch {
+            setServerStatus("ready"); // Proceed anyway, will handle on upload
+            setStatusMessage("");
+          }
+        }, 5000);
+      }
+    };
+
+    checkServerHealth();
+  }, []);
 
   // Parse voice command to intent and parameters
   const parseVoiceCommand = (text: string): DetectedCommand | null => {
@@ -160,6 +194,11 @@ export function VoiceCommandInterface() {
 
     setAppState("processing");
     setError(null);
+    
+    // Show wake-up message if server might be sleeping
+    if (!apiClient.isServerReady()) {
+      setStatusMessage("Waking up server... This may take up to 60 seconds. Please wait.");
+    }
 
     try {
       const uploadResult = await apiClient.uploadPDF(file);
@@ -171,9 +210,11 @@ export function VoiceCommandInterface() {
       });
       setUploadedFile(file);
       setAppState("uploaded");
+      setStatusMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
       setAppState("idle");
+      setStatusMessage("");
     }
   };
 
@@ -188,6 +229,11 @@ export function VoiceCommandInterface() {
 
     setAppState("processing");
     setError(null);
+    
+    // Show wake-up message if server might be sleeping
+    if (!apiClient.isServerReady()) {
+      setStatusMessage("Waking up server... This may take up to 60 seconds. Please wait.");
+    }
 
     try {
       const uploadResult = await apiClient.uploadPDF(file);
@@ -199,9 +245,11 @@ export function VoiceCommandInterface() {
       });
       setUploadedFile(file);
       setAppState("uploaded");
+      setStatusMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
       setAppState("idle");
+      setStatusMessage("");
     }
   };
 
@@ -352,6 +400,16 @@ export function VoiceCommandInterface() {
 
   return (
     <div className="space-y-8 mt-12">
+      {/* Server Status Display */}
+      {statusMessage && (
+        <Card className="bg-blue-500/10 border-blue-500/50 animate-scale-in shadow-lg shadow-blue-500/20">
+          <div className="p-4 flex items-center gap-3 text-blue-600 dark:text-blue-400">
+            <Server className="h-5 w-5 animate-pulse" />
+            <p className="text-sm font-medium">{statusMessage}</p>
+          </div>
+        </Card>
+      )}
+
       {/* Error Display */}
       {error && (
         <Card className="bg-destructive/10 border-destructive animate-scale-in shadow-lg shadow-destructive/20">
